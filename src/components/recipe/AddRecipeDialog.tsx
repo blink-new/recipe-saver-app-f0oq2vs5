@@ -34,12 +34,15 @@ export function AddRecipeDialog({ open, onOpenChange, onRecipeAdded }: AddRecipe
 
     setIsExtracting(true)
     try {
-      // Extract content from URL
-      const content = await blink.data.extractFromUrl(url)
+      // Extract content from the URL using Blink's data extraction
+      const extractedContent = await blink.data.extractFromUrl(url)
       
-      // Use AI to parse recipe data
+      // Use AI to parse the extracted content and structure it as a recipe
       const { object: recipeData } = await blink.ai.generateObject({
-        prompt: `Extract recipe information from this content: ${content}. If this is not a recipe, return null for title.`,
+        prompt: `Parse this webpage content and extract recipe information. Return a structured recipe object with title, description, ingredients (with amounts and units), instructions, prep time, cook time, servings, and difficulty level. If any information is missing, make reasonable estimates or leave empty.
+
+Content to parse:
+${extractedContent}`,
         schema: {
           type: 'object',
           properties: {
@@ -58,7 +61,8 @@ export function AddRecipeDialog({ open, onOpenChange, onRecipeAdded }: AddRecipe
                   amount: { type: 'number' },
                   unit: { type: 'string' },
                   notes: { type: 'string' }
-                }
+                },
+                required: ['name', 'amount', 'unit']
               }
             },
             instructions: {
@@ -66,7 +70,8 @@ export function AddRecipeDialog({ open, onOpenChange, onRecipeAdded }: AddRecipe
               items: { type: 'string' }
             },
             imageUrl: { type: 'string' }
-          }
+          },
+          required: ['title', 'ingredients', 'instructions']
         }
       })
 
@@ -101,17 +106,52 @@ export function AddRecipeDialog({ open, onOpenChange, onRecipeAdded }: AddRecipe
         updatedAt: new Date().toISOString()
       }
 
-      // For now, store in localStorage (will be replaced with database)
-      const existingRecipes = JSON.parse(localStorage.getItem('recipes') || '[]')
-      existingRecipes.push(recipe)
-      localStorage.setItem('recipes', JSON.stringify(existingRecipes))
+      // Store recipe in database
+      try {
+        await blink.db.recipes.create({
+          id: recipe.id,
+          userId: recipe.userId,
+          title: recipe.title,
+          description: recipe.description || '',
+          url: recipe.url || '',
+          imageUrl: recipe.imageUrl || '',
+          prepTime: recipe.prepTime || 0,
+          cookTime: recipe.cookTime || 0,
+          servings: recipe.servings,
+          difficulty: recipe.difficulty,
+          ingredients: JSON.stringify(recipe.ingredients),
+          instructions: JSON.stringify(recipe.instructions),
+          notes: recipe.notes || '',
+          tags: JSON.stringify(recipe.tags),
+          createdAt: recipe.createdAt,
+          updatedAt: recipe.updatedAt
+        })
+      } catch (dbError) {
+        console.warn('Database storage failed, falling back to localStorage:', dbError)
+        // Fallback to localStorage if database fails
+        const existingRecipes = JSON.parse(localStorage.getItem('recipes') || '[]')
+        existingRecipes.push(recipe)
+        localStorage.setItem('recipes', JSON.stringify(existingRecipes))
+      }
 
       onRecipeAdded(recipe)
       onOpenChange(false)
       setUrl('')
     } catch (error) {
       console.error('Failed to extract recipe:', error)
-      alert('Failed to extract recipe from URL. Please try again or add manually.')
+      let errorMessage = 'Failed to extract recipe from URL.'
+      
+      if (error instanceof Error) {
+        if (error.message.includes('No recipe found')) {
+          errorMessage = 'No recipe found at this URL. Please check the URL or try adding the recipe manually.'
+        } else if (error.message.includes('network') || error.message.includes('fetch')) {
+          errorMessage = 'Unable to access the URL. Please check your internet connection and try again.'
+        } else if (error.message.includes('parse') || error.message.includes('extract')) {
+          errorMessage = 'Unable to extract recipe data from this page. The page might not contain a recipe or may be in an unsupported format.'
+        }
+      }
+      
+      alert(errorMessage + ' You can try adding the recipe manually instead.')
     } finally {
       setIsExtracting(false)
     }
@@ -177,10 +217,33 @@ export function AddRecipeDialog({ open, onOpenChange, onRecipeAdded }: AddRecipe
         updatedAt: new Date().toISOString()
       }
 
-      // Store in localStorage
-      const existingRecipes = JSON.parse(localStorage.getItem('recipes') || '[]')
-      existingRecipes.push(recipe)
-      localStorage.setItem('recipes', JSON.stringify(existingRecipes))
+      // Store recipe in database
+      try {
+        await blink.db.recipes.create({
+          id: recipe.id,
+          userId: recipe.userId,
+          title: recipe.title,
+          description: recipe.description || '',
+          url: recipe.url || '',
+          imageUrl: recipe.imageUrl || '',
+          prepTime: recipe.prepTime || 0,
+          cookTime: recipe.cookTime || 0,
+          servings: recipe.servings,
+          difficulty: recipe.difficulty,
+          ingredients: JSON.stringify(recipe.ingredients),
+          instructions: JSON.stringify(recipe.instructions),
+          notes: recipe.notes || '',
+          tags: JSON.stringify(recipe.tags),
+          createdAt: recipe.createdAt,
+          updatedAt: recipe.updatedAt
+        })
+      } catch (dbError) {
+        console.warn('Database storage failed, falling back to localStorage:', dbError)
+        // Fallback to localStorage if database fails
+        const existingRecipes = JSON.parse(localStorage.getItem('recipes') || '[]')
+        existingRecipes.push(recipe)
+        localStorage.setItem('recipes', JSON.stringify(existingRecipes))
+      }
 
       onRecipeAdded(recipe)
       onOpenChange(false)
@@ -227,9 +290,12 @@ export function AddRecipeDialog({ open, onOpenChange, onRecipeAdded }: AddRecipe
                 </div>
                 <Button onClick={extractFromUrl} disabled={isExtracting || !url.trim()}>
                   {isExtracting ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Extracting...
+                    </>
                   ) : (
-                    'Extract'
+                    'Extract Recipe'
                   )}
                 </Button>
               </div>

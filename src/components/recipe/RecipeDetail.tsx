@@ -16,6 +16,7 @@ import {
   Plus,
   Minus
 } from 'lucide-react'
+import { blink } from '@/blink/client'
 import type { Recipe, Ingredient } from '@/types/recipe'
 
 interface RecipeDetailProps {
@@ -53,15 +54,24 @@ export function RecipeDetail({ recipe, open, onOpenChange, onRecipeUpdate }: Rec
     return (amount * multiplier).toFixed(multiplier < 1 ? 1 : 0)
   }
 
-  const saveNotes = () => {
+  const saveNotes = async () => {
     const updatedRecipe = { ...recipe, notes, updatedAt: new Date().toISOString() }
     
-    // Update localStorage
-    const existingRecipes = JSON.parse(localStorage.getItem('recipes') || '[]')
-    const recipeIndex = existingRecipes.findIndex((r: Recipe) => r.id === recipe.id)
-    if (recipeIndex !== -1) {
-      existingRecipes[recipeIndex] = updatedRecipe
-      localStorage.setItem('recipes', JSON.stringify(existingRecipes))
+    try {
+      // Update in database
+      await blink.db.recipes.update(recipe.id, {
+        notes,
+        updatedAt: updatedRecipe.updatedAt
+      })
+    } catch (dbError) {
+      console.warn('Database update failed, falling back to localStorage:', dbError)
+      // Fallback to localStorage
+      const existingRecipes = JSON.parse(localStorage.getItem('recipes') || '[]')
+      const recipeIndex = existingRecipes.findIndex((r: Recipe) => r.id === recipe.id)
+      if (recipeIndex !== -1) {
+        existingRecipes[recipeIndex] = updatedRecipe
+        localStorage.setItem('recipes', JSON.stringify(existingRecipes))
+      }
     }
     
     onRecipeUpdate(updatedRecipe)
