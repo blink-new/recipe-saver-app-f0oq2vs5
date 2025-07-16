@@ -58,20 +58,17 @@ export function RecipeDetail({ recipe, open, onOpenChange, onRecipeUpdate }: Rec
     const updatedRecipe = { ...recipe, notes, updatedAt: new Date().toISOString() }
     
     try {
-      // Update in database
-      await blink.db.recipes.update(recipe.id, {
-        notes,
-        updatedAt: updatedRecipe.updatedAt
-      })
-    } catch (dbError) {
-      console.warn('Database update failed, falling back to localStorage:', dbError)
-      // Fallback to localStorage
+      // Update in localStorage
       const existingRecipes = JSON.parse(localStorage.getItem('recipes') || '[]')
       const recipeIndex = existingRecipes.findIndex((r: Recipe) => r.id === recipe.id)
       if (recipeIndex !== -1) {
         existingRecipes[recipeIndex] = updatedRecipe
         localStorage.setItem('recipes', JSON.stringify(existingRecipes))
       }
+    } catch (error) {
+      console.error('Failed to update recipe in localStorage:', error)
+      alert('Failed to save notes. Please try again.')
+      return
     }
     
     onRecipeUpdate(updatedRecipe)

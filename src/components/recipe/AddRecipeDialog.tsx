@@ -29,13 +29,30 @@ export function AddRecipeDialog({ open, onOpenChange, onRecipeAdded }: AddRecipe
     instructions: ['']
   })
 
+  const isValidUrl = (urlString: string) => {
+    try {
+      const url = new URL(urlString)
+      return url.protocol === 'http:' || url.protocol === 'https:'
+    } catch {
+      return false
+    }
+  }
+
   const extractFromUrl = async () => {
-    if (!url.trim()) return
+    if (!url.trim()) {
+      alert('Please enter a URL')
+      return
+    }
+
+    if (!isValidUrl(url.trim())) {
+      alert('Please enter a valid URL (must start with http:// or https://)')
+      return
+    }
 
     setIsExtracting(true)
     try {
       // Extract content from the URL using Blink's data extraction
-      const extractedContent = await blink.data.extractFromUrl(url)
+      const extractedContent = await blink.data.extractFromUrl(url.trim())
       
       // Use AI to parse the extracted content and structure it as a recipe
       const { object: recipeData } = await blink.ai.generateObject({
@@ -86,7 +103,7 @@ ${extractedContent}`,
         userId: user.id,
         title: recipeData.title,
         description: recipeData.description || '',
-        url: url,
+        url: url.trim(),
         imageUrl: recipeData.imageUrl,
         prepTime: recipeData.prepTime,
         cookTime: recipeData.cookTime,
@@ -106,33 +123,10 @@ ${extractedContent}`,
         updatedAt: new Date().toISOString()
       }
 
-      // Store recipe in database
-      try {
-        await blink.db.recipes.create({
-          id: recipe.id,
-          userId: recipe.userId,
-          title: recipe.title,
-          description: recipe.description || '',
-          url: recipe.url || '',
-          imageUrl: recipe.imageUrl || '',
-          prepTime: recipe.prepTime || 0,
-          cookTime: recipe.cookTime || 0,
-          servings: recipe.servings,
-          difficulty: recipe.difficulty,
-          ingredients: JSON.stringify(recipe.ingredients),
-          instructions: JSON.stringify(recipe.instructions),
-          notes: recipe.notes || '',
-          tags: JSON.stringify(recipe.tags),
-          createdAt: recipe.createdAt,
-          updatedAt: recipe.updatedAt
-        })
-      } catch (dbError) {
-        console.warn('Database storage failed, falling back to localStorage:', dbError)
-        // Fallback to localStorage if database fails
-        const existingRecipes = JSON.parse(localStorage.getItem('recipes') || '[]')
-        existingRecipes.push(recipe)
-        localStorage.setItem('recipes', JSON.stringify(existingRecipes))
-      }
+      // Store recipe in localStorage
+      const existingRecipes = JSON.parse(localStorage.getItem('recipes') || '[]')
+      existingRecipes.push(recipe)
+      localStorage.setItem('recipes', JSON.stringify(existingRecipes))
 
       onRecipeAdded(recipe)
       onOpenChange(false)
@@ -192,6 +186,21 @@ ${extractedContent}`,
   }
 
   const saveManualRecipe = async () => {
+    if (!manualRecipe.title.trim()) {
+      alert('Please enter a recipe title')
+      return
+    }
+
+    if (manualRecipe.ingredients.filter(ing => ing.name.trim()).length === 0) {
+      alert('Please add at least one ingredient')
+      return
+    }
+
+    if (manualRecipe.instructions.filter(inst => inst.trim()).length === 0) {
+      alert('Please add at least one instruction')
+      return
+    }
+
     try {
       const user = await blink.auth.me()
       const recipe: Recipe = {
@@ -217,33 +226,10 @@ ${extractedContent}`,
         updatedAt: new Date().toISOString()
       }
 
-      // Store recipe in database
-      try {
-        await blink.db.recipes.create({
-          id: recipe.id,
-          userId: recipe.userId,
-          title: recipe.title,
-          description: recipe.description || '',
-          url: recipe.url || '',
-          imageUrl: recipe.imageUrl || '',
-          prepTime: recipe.prepTime || 0,
-          cookTime: recipe.cookTime || 0,
-          servings: recipe.servings,
-          difficulty: recipe.difficulty,
-          ingredients: JSON.stringify(recipe.ingredients),
-          instructions: JSON.stringify(recipe.instructions),
-          notes: recipe.notes || '',
-          tags: JSON.stringify(recipe.tags),
-          createdAt: recipe.createdAt,
-          updatedAt: recipe.updatedAt
-        })
-      } catch (dbError) {
-        console.warn('Database storage failed, falling back to localStorage:', dbError)
-        // Fallback to localStorage if database fails
-        const existingRecipes = JSON.parse(localStorage.getItem('recipes') || '[]')
-        existingRecipes.push(recipe)
-        localStorage.setItem('recipes', JSON.stringify(existingRecipes))
-      }
+      // Store recipe in localStorage
+      const existingRecipes = JSON.parse(localStorage.getItem('recipes') || '[]')
+      existingRecipes.push(recipe)
+      localStorage.setItem('recipes', JSON.stringify(existingRecipes))
 
       onRecipeAdded(recipe)
       onOpenChange(false)

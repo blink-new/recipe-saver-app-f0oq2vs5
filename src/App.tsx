@@ -31,44 +31,13 @@ function App() {
     if (!user?.id) return
     
     try {
-      // Try to load from database first
-      const dbRecipes = await blink.db.recipes.list({
-        where: { userId: user.id },
-        orderBy: { createdAt: 'desc' }
-      })
-      
-      // Convert database format back to Recipe objects
-      const recipes = dbRecipes.map((dbRecipe: any) => ({
-        id: dbRecipe.id,
-        userId: dbRecipe.userId,
-        title: dbRecipe.title,
-        description: dbRecipe.description,
-        url: dbRecipe.url,
-        imageUrl: dbRecipe.imageUrl,
-        prepTime: dbRecipe.prepTime,
-        cookTime: dbRecipe.cookTime,
-        servings: dbRecipe.servings,
-        difficulty: dbRecipe.difficulty,
-        ingredients: JSON.parse(dbRecipe.ingredients || '[]'),
-        instructions: JSON.parse(dbRecipe.instructions || '[]'),
-        notes: dbRecipe.notes,
-        tags: JSON.parse(dbRecipe.tags || '[]'),
-        createdAt: dbRecipe.createdAt,
-        updatedAt: dbRecipe.updatedAt
-      }))
-      
-      setRecipes(recipes)
-    } catch (dbError) {
-      console.warn('Database load failed, falling back to localStorage:', dbError)
-      // Fallback to localStorage
-      try {
-        const savedRecipes = JSON.parse(localStorage.getItem('recipes') || '[]')
-        const userRecipes = savedRecipes.filter((recipe: Recipe) => recipe.userId === user.id)
-        setRecipes(userRecipes)
-      } catch (error) {
-        console.error('Failed to load recipes from localStorage:', error)
-        setRecipes([])
-      }
+      // Load from localStorage (primary storage for now)
+      const savedRecipes = JSON.parse(localStorage.getItem('recipes') || '[]')
+      const userRecipes = savedRecipes.filter((recipe: Recipe) => recipe.userId === user.id)
+      setRecipes(userRecipes)
+    } catch (error) {
+      console.error('Failed to load recipes from localStorage:', error)
+      setRecipes([])
     }
   }, [user?.id])
 
